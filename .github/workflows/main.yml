@@ -8,11 +8,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Create Game App
+      - name: Build Game App
         run: |
           mkdir -p Payload/KaboomBlast.app
           
-          # 1. App Settings (Info.plist)
+          # 1. Info.plist - App Settings
           cat <<EOF > Payload/KaboomBlast.app/Info.plist
           <?xml version="1.0" encoding="UTF-8"?>
           <plist version="1.0"><dict>
@@ -24,11 +24,10 @@ jobs:
             <key>LSRequiresIPhoneOS</key><true/>
             <key>MinimumOSVersion</key><string>14.0</string>
             <key>UIRequiresFullScreen</key><true/>
-            <key>UIViewControllerBasedStatusBarAppearance</key><false/>
           </dict></plist>
           EOF
 
-          # 2. Game Code with Audio Fixes
+          # 2. main.swift - Game Code with Sound Support
           cat <<EOF > main.swift
           import UIKit
           import WebKit
@@ -38,37 +37,26 @@ jobs:
               override func viewDidLoad() {
                   super.viewDidLoad()
                   
-                  // SOUND FIX: This tells the iPad to play sound even if the silent switch is ON
+                  // SOUND FIX: Force audio to play even on silent mode
                   try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [])
                   try? AVAudioSession.sharedInstance().setActive(true)
 
                   let config = WKWebViewConfiguration()
                   config.allowsInlineMediaPlayback = true
-                  
-                  // This allows sounds to play without needing a "Tap" first
                   config.mediaTypesRequiringUserActionForPlayback = []
 
-                  let w = WKWebView(frame: .zero, configuration: config)
-                  w.translatesAutoresizingMaskIntoConstraints = false
+                  let w = WKWebView(frame: view.bounds, configuration: config)
+                  w.autoresizingMask = [.flexibleWidth, .flexibleHeight]
                   
-                  // GAME FIX: Disable bouncing and scrolling
+                  // GAME OPTIMIZATION: Disable scrolling/bouncing for better play
                   w.scrollView.bounces = false
                   w.scrollView.isScrollEnabled = false
-                  w.scrollView.contentInsetAdjustmentBehavior = .never
                   
                   view.addSubview(w)
-                  NSLayoutConstraint.activate([
-                      w.topAnchor.constraint(equalTo: view.topAnchor),
-                      w.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-                      w.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-                      w.trailingAnchor.constraint(equalTo: view.trailingAnchor)
-                  ])
                   
-                  // REPLACE THE URL BELOW
-                  let urlString = https://13f9c825-9bdd-4445-b864-1003384176c0-00-1atqi0j35lbra.sisko.replit.dev/
-                  if let url = URL(string: urlString) {
-                      w.load(URLRequest(url: url))
-                  }
+                  // YOUR SPECIFIC REPLIT URL
+                  let url = URL(string: "https://13f9c825-9bdd-4445-b864-1003384176c0-00-1atqi0j35lbra.sisko.replit.dev/")!
+                  w.load(URLRequest(url: url))
               }
               override var prefersStatusBarHidden: Bool { return true }
           }
@@ -84,14 +72,14 @@ jobs:
           }
           EOF
 
-          # 3. Compile the Game
+          # 3. Compile the app using the Mac's tools
           xcrun -sdk iphoneos swiftc main.swift \
           -target arm64-apple-ios14.0 \
           -sdk $(xcrun --sdk iphoneos --show-sdk-path) \
           -framework UIKit -framework WebKit -framework AVFoundation \
           -o Payload/KaboomBlast.app/KaboomBlast
 
-          # 4. Create IPA
+          # 4. Create the final IPA file
           zip -r Kaboom-Blast.ipa Payload
 
       - name: Upload
