@@ -1,0 +1,101 @@
+name: Build KABOOM BLAST IPA
+on: [push, workflow_dispatch]
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create Game App
+        run: |
+          mkdir -p Payload/KaboomBlast.app
+          
+          # 1. App Settings (Info.plist)
+          cat <<EOF > Payload/KaboomBlast.app/Info.plist
+          <?xml version="1.0" encoding="UTF-8"?>
+          <plist version="1.0"><dict>
+            <key>CFBundleExecutable</key><string>KaboomBlast</string>
+            <key>CFBundleIdentifier</key><string>com.themusicals.kaboomblast</string>
+            <key>CFBundleName</key><string>KABOOM BLAST</string>
+            <key>CFBundlePackageType</key><string>APPL</string>
+            <key>CFBundleShortVersionString</key><string>1.0</string>
+            <key>LSRequiresIPhoneOS</key><true/>
+            <key>MinimumOSVersion</key><string>14.0</string>
+            <key>UIRequiresFullScreen</key><true/>
+            <key>UIViewControllerBasedStatusBarAppearance</key><false/>
+          </dict></plist>
+          EOF
+
+          # 2. Game Code with Audio Fixes
+          cat <<EOF > main.swift
+          import UIKit
+          import WebKit
+          import AVFoundation
+
+          class VC: UIViewController {
+              override func viewDidLoad() {
+                  super.viewDidLoad()
+                  
+                  // SOUND FIX: This tells the iPad to play sound even if the silent switch is ON
+                  try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [])
+                  try? AVAudioSession.sharedInstance().setActive(true)
+
+                  let config = WKWebViewConfiguration()
+                  config.allowsInlineMediaPlayback = true
+                  
+                  // This allows sounds to play without needing a "Tap" first
+                  config.mediaTypesRequiringUserActionForPlayback = []
+
+                  let w = WKWebView(frame: .zero, configuration: config)
+                  w.translatesAutoresizingMaskIntoConstraints = false
+                  
+                  // GAME FIX: Disable bouncing and scrolling
+                  w.scrollView.bounces = false
+                  w.scrollView.isScrollEnabled = false
+                  w.scrollView.contentInsetAdjustmentBehavior = .never
+                  
+                  view.addSubview(w)
+                  NSLayoutConstraint.activate([
+                      w.topAnchor.constraint(equalTo: view.topAnchor),
+                      w.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+                      w.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+                      w.trailingAnchor.constraint(equalTo: view.trailingAnchor)
+                  ])
+                  
+                  // REPLACE THE URL BELOW
+                  let urlString = https://13f9c825-9bdd-4445-b864-1003384176c0-00-1atqi0j35lbra.sisko.replit.dev/
+                  if let url = URL(string: urlString) {
+                      w.load(URLRequest(url: url))
+                  }
+              }
+              override var prefersStatusBarHidden: Bool { return true }
+          }
+
+          @main class App: UIResponder, UIApplicationDelegate {
+              var window: UIWindow?
+              func application(_ a: UIApplication, didFinishLaunchingWithOptions o: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+                  window = UIWindow(frame: UIScreen.main.bounds)
+                  window?.rootViewController = VC()
+                  window?.makeKeyAndVisible()
+                  return true
+              }
+          }
+          EOF
+
+          # 3. Compile the Game
+          xcrun -sdk iphoneos swiftc main.swift \
+          -target arm64-apple-ios14.0 \
+          -sdk $(xcrun --sdk iphoneos --show-sdk-path) \
+          -framework UIKit -framework WebKit -framework AVFoundation \
+          -o Payload/KaboomBlast.app/KaboomBlast
+
+          # 4. Create IPA
+          zip -r Kaboom-Blast.ipa Payload
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kaboom-Blast-IPA
+          path: Kaboom-Blast.ipa
